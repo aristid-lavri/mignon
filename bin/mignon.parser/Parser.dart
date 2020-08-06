@@ -1,4 +1,5 @@
 import '../mignon.core/Expression.dart';
+import '../mignon.core/Statements.dart';
 import '../mignon.core/Token.dart';
 import '../mignon.core/Token_Kind.dart';
 
@@ -8,8 +9,116 @@ class Parser {
 
   Parser(this._tokens);
 
+  LangExpression parse() {
+    try {
+      return Expression();
+    } catch (e) {
+      return null;
+    }
+  }
+
+  List<Statement> parseStatements() {
+    List<Statement> statements = [];
+
+    while (!IsAtEnd()) {
+      statements.add(declaration());
+    }
+
+    return statements;
+  }
+
+  Statement statement() {
+    if (Match([Kind.PRINT])) return printStatement();
+    if (Match([Kind.LEFT_BRACE])) return Block(block());
+    return expressionStatement();
+  }
+
+  Statement printStatement() {
+    var value = Expression();
+    Consume(Kind.SEMICOLON, "Expect ';' after value.");
+    return Print(value);
+  }
+
+  Statement expressionStatement() {
+    var expr = Expression();
+    Consume(Kind.SEMICOLON, "Expect ';' after expression.");
+    return StatementExpression(expr);
+  }
+
+  List<Statement> block() {
+    var statements = [];
+
+    while (!Check(Kind.RIGHT_BRACE) && !IsAtEnd()) {
+      statements.add(declaration());
+    }
+
+    Consume(Kind.RIGHT_BRACE, "Expect '}' after block.");
+    return statements;
+  }
+
+  Statement declaration() {
+    try {
+      if (Match([Kind.VAR])) return VarDeclaration();
+
+      return statement();
+    } catch (e) {
+      Synchronize();
+      return null;
+    }
+  }
+
+  Statement VarDeclaration() {
+    var name = Consume(Kind.IDENTIFIER, 'Expect variable name.');
+
+    var initializer;
+
+    if (Match([Kind.EQUAL])) {
+      initializer = Expression();
+    }
+
+    Consume(Kind.SEMICOLON, "Expect ';' after variable declaration.");
+    return Var(name, initializer);
+  }
+
+  void Synchronize() {
+    Advance();
+
+    while (!IsAtEnd()) {
+      if (Previous().kind == Kind.SEMICOLON) return;
+
+      switch (Peek().kind) {
+        case Kind.CLASS:
+        case Kind.FUN:
+        case Kind.VAR:
+        case Kind.FOR:
+        case Kind.IF:
+        case Kind.WHILE:
+        case Kind.PRINT:
+        case Kind.RETURN:
+          return;
+      }
+
+      Advance();
+    }
+  }
+
   LangExpression Expression() {
-    return Equality();
+    return Assignment();
+  }
+
+  LangExpression Assignment() {
+    var expression = Equality();
+
+    if (Match([Kind.EQUAL])) {
+      var value = Assignment();
+
+      if (expression is Variable) {
+        var name = expression.name;
+        return Assign(name, value);
+      }
+    }
+
+    return expression;
   }
 
   LangExpression Equality() {
@@ -80,14 +189,18 @@ class Parser {
       return Literal(Previous().literal);
     }
 
+    if (Match([Kind.IDENTIFIER])) {
+      return Variable(Previous());
+    }
+
     if (Match([Kind.LEFT_PARENTH])) {
       var expr = Expression();
-      print('$Kind.RIGHT_PARENTH, Expect ")" after expression.');
+
+      Consume(Kind.RIGHT_PARENTH, 'Expect ")" after expression.');
       return Grouping(expr);
     }
 
-    var err = Peek().toString();
-    throw Exception('$err Expect Expression');
+    throw Error(Peek(), 'Expect Expression');
   }
 
   bool Match(List<Kind> kinds) {
@@ -122,5 +235,17 @@ class Parser {
   bool Check(Kind kind) {
     if (IsAtEnd()) return false;
     return Peek().kind == kind;
+  }
+
+  Token Consume(Kind kind, String message) {
+    if (Check(kind)) return Advance();
+
+    throw Error(Peek(), message);
+  }
+
+  Exception Error(Token token, String message) {
+    // Error.Emit(token, message);
+
+    return Exception(message);
   }
 }

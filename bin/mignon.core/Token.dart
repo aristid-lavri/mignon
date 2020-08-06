@@ -10,6 +10,6 @@ class Token {
 
   @override
   String toString() {
-    return 'type: $kind. Lexeme: $lexeme. Value: $literal';
+    return 'type: $kind; Lexeme: $lexeme: Value: $literal';
   }
 }

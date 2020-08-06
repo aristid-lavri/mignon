@@ -1,0 +1,5 @@
+var a = true;
+var boolean = (2 < 3);
+
+print a; 
+print boolean;
